@@ -17,7 +17,7 @@ int main (int argc, char *argv[])
   int my2drank;
   int nrowblocks;
   int mycoords[2];
-  int checkrank = 7;
+  int checkrank = 4;
   int offset;
 
   MPI_Init(&argc, &argv);
@@ -92,33 +92,62 @@ int main (int argc, char *argv[])
 
 int transpose2d(int *a, int blockdim, MPI_Comm comm2d) 
 {
-    int numtasks, taskid, my2drank, mycoords[2];
-    // MPI_Comm_rank(comm2d, &taskid);
-    // MPI_Comm_size(comm2d, &numtasks);
-    // printf("Test: %d %d", numtasks, taskid);
-
-
-    int *alocal = (int *) malloc(blockdim*blockdim*sizeof(int));
-
-
+    int my2drank, mycoords[2], temp;
     MPI_Comm_rank(comm2d, &my2drank);
     MPI_Cart_coords(comm2d, my2drank, 2, mycoords);
-    printf("Test: %d %d %d %d\n", my2drank, mycoords[0], mycoords[1], blockdim);
+    MPI_Request request;
+    MPI_Status status;
+    // printf("Test: %d %d %d %d\n", my2drank, mycoords[0], mycoords[1], blockdim);
 
-    // Now transpose the local array
-    int i, j, temp;
-    for( i = 0; i < blockdim; i++ ) {
-        for( j = 0; j < blockdim; j++ ) {
-
-            alocal[i*blockdim + j] = a[i*blockdim + j];
-        }
-    }
-    for( i = 0; i < blockdim; i++ ) {
-        for( j = 0; j < blockdim; j++ ) {
-
-            a[i*blockdim + j] = alocal[j*blockdim + i];
+    // // local transpose
+    int j, k;
+    for( j = 0; j < blockdim; j++ ) {
+        for( k = 0; k < j; k++ ) {
+            temp = a[j*blockdim + k];
+            a[j*blockdim + k] = a[k*blockdim + j];
+            a[k*blockdim + j] = temp;
         }
     }
 
-    return(0);
+    if( mycoords[0] != mycoords[1] ) {
+        // send item by item to their necessary companion
+        for( j = 0; j < blockdim; j++ ) {
+            for( k = 0; k < blockdim; k++ ) {
+                // index = i*n + j
+                // printf("%d: %d %d %d %d\n", taskid, j/blockdim, 0, j*blockdim, a[i*blockdim + j]);
+                MPI_Irecv( &temp, 1, MPI_INT, MPI_ANY_SOURCE, 0, comm2d, &request);
+                MPI_Send(a + (j*blockdim + k), 1, MPI_INT, mycoords[1] * blockdim + mycoords[0], 0, comm2d);
+                // printf("%d: sent \n", taskid);
+                // printf("%d: waiting to recieve %d\n", taskid, count);
+                MPI_Wait( &request, &status );
+                // printf("%d: recieved from %d\n", my2drank, status.MPI_SOURCE);
+                a[j*blockdim + k] = temp;
+            }
+        }
+    }
+
+
+    // int *alocal = (int *) malloc(blockdim*blockdim*sizeof(int));
+
+
+    // MPI_Comm_rank(comm2d, &my2drank);
+    // MPI_Cart_coords(comm2d, my2drank, 2, mycoords);
+    // printf("Test: %d %d %d %d\n", my2drank, mycoords[0], mycoords[1], blockdim);
+
+    // // Now transpose the local array
+    // int i, j, temp;
+    // for( i = 0; i < blockdim; i++ ) {
+    //     for( j = 0; j < blockdim; j++ ) {
+
+    //         alocal[i*blockdim + j] = a[i*blockdim + j];
+    //     }
+    // }
+    // for( i = 0; i < blockdim; i++ ) {
+    //     for( j = 0; j < blockdim; j++ ) {
+
+    //         a[i*blockdim + j] = alocal[j*blockdim + i];
+    //     }
+    // }
+
+    // return(0);
 }
