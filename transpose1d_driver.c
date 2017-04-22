@@ -84,21 +84,46 @@ int main (int argc, char *argv[]) {
 int transpose1d(int *a, int n, int blockdim, MPI_Comm comm) {
 
     int numtasks, taskid;
-    int temp = 0;
+    int temp = 0; // will hold the temporary matrix value
     MPI_Comm_size(MPI_COMM_WORLD, &numtasks);
     MPI_Comm_rank(MPI_COMM_WORLD, &taskid);
     MPI_Request request;
     MPI_Status status;
 
+    // n == arg 0
+    // num tasks = processors
+    // blockdim = number of rows per task = num tasks / processors
 
-    // Scatter data
-    int *alocal = (int *) malloc(n*blockdim*sizeof(int));
+
     // Scatter in parts
-    int i, j, k;
+    // int i, j, k, count;
+    int i, j, k, count;
     for(i = 0; i < blockdim; i++ ) {
-        for(j = 0; j < n; j+= blockdim ) {
-            for( k = 0; k < blockdim; k++ ) {
-                MPI_SEND(a + (i*blockdim + j + k), 1, MPI_INT, j*blockdim, 0, comm);
+        for(j = taskid * blockdim, count = 0; count < n; count ++ ) {
+            // index = i*n + j
+            // printf("%d: %d %d %d %d\n", taskid, j/blockdim, 0, j*blockdim, a[i*blockdim + j]);
+            MPI_Irecv( &temp, 1, MPI_INT, MPI_ANY_SOURCE, taskid, comm, &request);
+            MPI_Send(a + (i*n + j), 1, MPI_INT, j/blockdim, j/blockdim, comm);
+            // printf("%d: sent \n", taskid);
+            // printf("%d: waiting to recieve %d\n", taskid, count);
+            MPI_Wait( &request, &status );
+            // printf("%d: recieved from %d\n", taskid, status.MPI_SOURCE);
+            a[status.MPI_SOURCE*blockdim + i*n + j%blockdim] = temp;
+            j=(j+1)%n;
+        }
+
+        MPI_Barrier(comm);
+    }
+
+    // do mini transpose in ever blockdim by blockdim square
+    // every blockdim square
+    for( i = 0; i < numtasks; i++ ) {
+        // every row
+        for( j = 0; j < blockdim; j++ ) {
+            for( k = 0; k < j; k++ ) {
+                temp = a[j*n + i*blockdim + k];
+                a[j*n + i*blockdim + k] = a[k*n + i*blockdim + j];
+                a[k*n + i*blockdim + j] = temp;
             }
         }
     }
