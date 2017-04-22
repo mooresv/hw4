@@ -1,4 +1,0 @@
-all:
-	
-
-1d: mpicc ./transposekyt rewq MN 
