@@ -87,15 +87,19 @@ int transpose1d(int *a, int n, int blockdim, MPI_Comm comm) {
     int temp = 0;
     MPI_Comm_size(MPI_COMM_WORLD, &numtasks);
     MPI_Comm_rank(MPI_COMM_WORLD, &taskid);
+    MPI_Request request;
+    MPI_Status status;
 
 
     // Scatter data
     int *alocal = (int *) malloc(n*blockdim*sizeof(int));
     // Scatter in parts
-    int i,j;
+    int i, j, k;
     for(i = 0; i < blockdim; i++ ) {
         for(j = 0; j < n; j+= blockdim ) {
-            MPI_Scatter(a, blockdim, MPI_INT, alocal + (i*n + j), blockdim, MPI_INT, j/blockdim, comm);
+            for( k = 0; k < blockdim; k++ ) {
+                MPI_SEND(a + (i*blockdim + j + k), 1, MPI_INT, j*blockdim, 0, comm);
+            }
         }
     }
     
@@ -109,11 +113,11 @@ int transpose1d(int *a, int n, int blockdim, MPI_Comm comm) {
     // }
 
     // transpose arrays
-    for(i = 0; i < blockdim; i++ ) {
-        for(j = 0; j < n; j+= blockdim ) {
-            a[i*n + j] = alocal[i*n + j];
-        }
-    }
+    // for(i = 0; i < blockdim; i++ ) {
+    //     for(j = 0; j < n; j+= blockdim ) {
+    //         a[i*n + j] = alocal[i*n + j];
+    //     }
+    // }
 
     // if( taskid == 1 ) {
     //     for (i = 0; i < blockdim; i++) {
