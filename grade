@@ -1,0 +1,4 @@
+2d also fails on for example ibrun -np 16 ./2d 32
+The problem is that your destination rank for the send is out of range.
+Very nice job, other than that error which I think you can fix.
+Grade is 18/20
